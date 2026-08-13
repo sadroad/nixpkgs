@@ -146,6 +146,7 @@ let
       sikmir
       linsui
       pandapip1
+      sadroad
     ];
   };
 in

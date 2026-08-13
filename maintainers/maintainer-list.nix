@@ -25195,6 +25195,14 @@
     github = "saadndm";
     githubId = 88615188;
   };
+  sadroad = {
+    name = "Alex Villablanca";
+    github = "sadroad";
+    githubId = 30816242;
+    email = "alex@villablanca.tech";
+    keys = [ { fingerprint = "346F 4331 45F5 FCDD FEB4  3BEE 2B82 6E3C 035C 8BB5"; } ];
+  };
+
   sagikazarmark = {
     name = "Mark Sagi-Kazar";
     email = "mark.sagikazar@gmail.com";
