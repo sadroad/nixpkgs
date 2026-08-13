@@ -3,50 +3,84 @@
   stdenv,
   fetchurl,
   fetchFromGitHub,
-  flutter329,
+  flutter341,
+  rustPlatform,
+  cacert,
+  writeText,
   makeDesktopItem,
   copyDesktopItems,
   nixosTests,
   libayatana-appindicator,
   undmg,
   makeBinaryWrapper,
-  fetchpatch,
 }:
 
 let
   pname = "localsend";
-  version = "1.17.0";
+  version = "1.18.0";
 
-  linux = flutter329.buildFlutterApplication rec {
-    inherit pname version;
+  src = fetchFromGitHub {
+    owner = "localsend";
+    repo = "localsend";
+    tag = "v${version}";
+    hash = "sha256-AmQVXGMVKLTOZ0HMi05ba/y4TmB56NlNvtGaKYvqt4o=";
+  };
 
-    src = fetchFromGitHub {
-      owner = "localsend";
-      repo = "localsend";
-      tag = "v${version}";
-      hash = "sha256-1xMzlIcGEJ58laSM48bCKMxzHQ36eUHD5Mac0O1dnXk=";
-    };
+  rustDep = rustPlatform.buildRustPackage {
+    inherit pname version src;
+
+    cargoHash = "sha256-mdyWYfzS6YieY+dwQXREZJDo4PEKO5W9C3A3XGWoDKI=";
+    cargoBuildFlags = [ "--package=rust_lib_localsend_app" ];
+    cargoTestFlags = [
+      "--package=localsend"
+      "--package=rust_lib_localsend_app"
+    ];
+
+    nativeCheckInputs = [ cacert ];
+
+    postInstall = ''
+      rm $out/lib/librust_lib_localsend_app.a
+    '';
+
+    passthru.libraryPath = "lib/librust_lib_localsend_app.so";
+  };
+
+  linux = flutter341.buildFlutterApplication rec {
+    inherit pname version src;
 
     sourceRoot = "${src.name}/app";
 
     pubspecLock = lib.importJSON ./pubspec.lock.json;
 
-    gitHashes = {
-      permission_handler_windows = "sha256-+TP3neqlQRZnW6BxHaXr2EbmdITIx1Yo7AEn5iwAhwM=";
-      pasteboard = "sha256-lJA5OWoAHfxORqWMglKzhsL1IFr9YcdAQP/NVOLYB4o=";
-    };
+    gitHashes = lib.importJSON ./git-hashes.json;
 
-    patches = [
-      # Fix for https://github.com/localsend/localsend/security/advisories/GHSA-34v6-52hh-x4r4
-      # See: https://github.com/NixOS/nixpkgs/issues/488755
-      # Can be removed with new release > 1.17.0
-      (fetchpatch {
-        url = "https://github.com/localsend/localsend/commit/8f3cec85aa29b2b13fed9b2f8e499e1ac9b0504c.patch";
-        hash = "sha256-Fswir+TebCDPxHVBg8YM3ROx2uoLG92E3E15wnzHz+U=";
-      })
-    ];
+    customSourceBuilders.rust_lib_localsend_app =
+      { version, src, ... }:
+      stdenv.mkDerivation {
+        pname = "rust_lib_localsend_app";
+        inherit version src;
+        inherit (src) passthru;
 
-    patchFlags = [ "-p2" ];
+        postPatch =
+          let
+            fakeCargokitCmake = writeText "FakeCargokit.cmake" ''
+              function(apply_cargokit target manifest_dir lib_name any_symbol_name)
+                set("''${target}_cargokit_lib" ${rustDep}/${rustDep.passthru.libraryPath} PARENT_SCOPE)
+              endfunction()
+            '';
+          in
+          ''
+            cp ${fakeCargokitCmake} packages/localsend_isolates/rust_builder/cargokit/cmake/cargokit.cmake
+          '';
+
+        installPhase = ''
+          runHook preInstall
+
+          cp -r . "$out"
+
+          runHook postInstall
+        '';
+      };
 
     postPatch = ''
       substituteInPlace lib/util/native/autostart_helper.dart \
@@ -94,6 +128,7 @@ let
     ];
 
     passthru = {
+      inherit rustDep;
       updateScript = ./update.sh;
       tests.localsend = nixosTests.localsend;
     };
@@ -108,7 +143,7 @@ let
 
     src = fetchurl {
       url = "https://github.com/localsend/localsend/releases/download/v${version}/LocalSend-${version}.dmg";
-      hash = "sha256-/fGkLuE+uf3WrpTcWIOYHooJWZ51i94j9uZ3xPq1yTw=";
+      hash = "sha256-k6uITCcDoPq9cmEQl7JhbA3vhsQlbOoq3XoP823Xazo=";
     };
 
     nativeBuildInputs = [
